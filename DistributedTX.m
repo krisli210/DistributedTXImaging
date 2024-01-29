@@ -14,7 +14,7 @@ rng(2);
     prm.NRB = 20; % number of resource blocks
     prm.K = 12*prm.NRB;
     
-    prm.U = 1; % U per RB
+    prm.U = 8; % U per RB
     prm.N_T = 1; % number of time slots
     prm.Nofdm = 14; %number of OFDM symbols per slot
     prm.N_s = prm.N_T*prm.Nofdm;
@@ -31,11 +31,11 @@ rng(2);
 
 % % % Scene Construction
     
-    prm.N_theta = 32;
+    prm.N_theta = 128;
     thetaMin = prm.RxAZlim(1); thetaMax = prm.RxAZlim(2); %in Azimuth
     prm.AzBins = thetaMin:(thetaMax-thetaMin)/(prm.N_theta-1):thetaMax;
 
-    prm.L = 15;
+    prm.L = 150;
     prm.rMin = 20; prm.rMax = 70;
 
     limit_rangeRes = false;
@@ -83,7 +83,7 @@ rng(2);
         start_k_index = (k-1) * prm.N * prm.N_s; % no idea if this works
         A_Theta(start_k_index + 1:start_k_index + prm.N*prm.N_s, :) = A_Theta_k;
     end
-    Z_hat_vec = omp(A_Theta, Y_tens(:), 30, 1e-20);
+    Z_hat_vec = omp(A_Theta, Y_tens(:), prm.L, 1e-20);
     Z_hat = reshape(Z_hat_vec, [prm.N_R prm.N_theta]);
 
     peaksnr = psnr(abs(Z_hat).^2, abs(Z).^2, max(abs(Z).^2, [], "all"));

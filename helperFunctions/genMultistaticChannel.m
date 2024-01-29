@@ -7,14 +7,14 @@ function [H_tens, Z, ScatPosPol, UserPosPol, Psi] = genMultistaticChannel(prm)
     % tau as U x K
     % alpha as U x K
     
-    % [azInd, rangeInd] = getRICE_Image();
-    % prm.L = length(azInd);
+    [azInd, rangeInd] = getRICE_Image();
+    prm.L = length(azInd);
 
     % azInd = randperm(prm.N_theta, prm.L);
     % rangeInd = randperm(prm.N_R, prm.L);
     
-    azInd = randi(prm.N_theta, [prm.L, 1]);
-    rangeInd = randi(prm.N_R, [prm.L, 1]);
+    % azInd = randi(prm.N_theta, [prm.L, 1]);
+    % rangeInd = randi(prm.N_R, [prm.L, 1]);
 
     azValues = prm.AzBins(azInd);
     rangeValues = prm.RangeBins(rangeInd);
@@ -31,7 +31,7 @@ function [H_tens, Z, ScatPosPol, UserPosPol, Psi] = genMultistaticChannel(prm)
     Psi = zeros(prm.N, prm.U, prm.K, prm.N_R*prm.N_theta);
 
     % Channel Construction
-
+    
     for k = 1:prm.K
         for u = 1:prm.U
                 % For now assume that the user is randomly placed in grid
