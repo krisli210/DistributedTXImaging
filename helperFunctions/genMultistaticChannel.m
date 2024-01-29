@@ -1,14 +1,20 @@
-function [H_tens, Z, ScatPosPol, UserPosPol, Psi, tau, alpha] = genMultistaticChannel(prm)
+function [H_tens, Z, ScatPosPol, UserPosPol, Psi] = genMultistaticChannel(prm)
     % H_tens output as N x U x K
     % Z as N_R x N_Theta
     % ScatPosPol as 2 x L
     % UserPosPol as 2 x U x K
-    % Psi as N x K x U x (N_R * N_Theta)
+    % Psi as N x U x K x (N_R * N_Theta)
     % tau as U x K
     % alpha as U x K
     
-    azInd = randperm(prm.N_theta, prm.L);
-    rangeInd = randperm(prm.N_R, prm.L);
+    % [azInd, rangeInd] = getRICE_Image();
+    % prm.L = length(azInd);
+
+    % azInd = randperm(prm.N_theta, prm.L);
+    % rangeInd = randperm(prm.N_R, prm.L);
+    
+    azInd = randi(prm.N_theta, [prm.L, 1]);
+    rangeInd = randi(prm.N_R, [prm.L, 1]);
 
     azValues = prm.AzBins(azInd);
     rangeValues = prm.RangeBins(rangeInd);
@@ -17,30 +23,38 @@ function [H_tens, Z, ScatPosPol, UserPosPol, Psi, tau, alpha] = genMultistaticCh
     ScatCoeff = ones(1, prm.L) .* complex(1, 1) ./ sqrt(2);
 
     Z = zeros(prm.N_R, prm.N_theta);
+    lin_index = sub2ind(size(Z), rangeInd, azInd);
+    Z(lin_index) = ScatCoeff;
 
+    UserPosPol = zeros(2, prm.U, prm.K);
     H_tens = zeros(prm.N, prm.U, prm.K);
-    
+    Psi = zeros(prm.N, prm.U, prm.K, prm.N_R*prm.N_theta);
+
     % Channel Construction
-    for l = 1:prm.L
-        
-        for k = 1:prm.K
 
-            for u = 1:prm.U
+    for k = 1:prm.K
+        for u = 1:prm.U
                 % For now assume that the user is randomly placed in grid
+            for ii = 1:prm.N_R
+                for jj = 1:prm.N_theta
+                    % For now assume that the user is randomly placed in grid
+                    theta_uk = prm.AzBins(randperm(prm.N_theta, 1));
+                    r_uk = prm.RangeBins(randperm(prm.N_R, 1));
+                    UserPosPol(:, u, k) = [r_uk, theta_uk];
 
-                theta_uk = prm.AzBins(randperm(prm.N_theta, 1));
-                r_uk = prm.RangeBins(randperm(prm.N_R, 1));
-                UserPosPol(:, u, k) = [r_uk, theta_uk];
-                d_uk = sqrt(r_uk^2 + rangeValues(l)^2 - 2*r_uk*rangeValues(l)*cosd(theta_uk-azValues(l))) + rangeValues(l);
-                tau_uk = d_uk / prm.PropagationSpeed;
-                
-                alpha_uk = (4*pi*d_uk / prm.lam)^-2;
-                
-                H_tens(:, u, k) = H_tens(:, u, k) + alpha_uk * ScatCoeff(l) ... 
-                                  * exp(-1j * 2*pi * (k * prm.Delta_f*tau_uk)) ...
-                                  .* exp(1j*2*pi*prm.DeltaRX * (0:prm.N-1).' * sind(azValues(l))); 
-                
+                    d_uk = sqrt(r_uk^2 + prm.RangeBins(ii)^2 - 2*r_uk*prm.RangeBins(ii)*cosd(theta_uk-prm.AzBins(jj))) + prm.RangeBins(ii);
+                    tau_uk = d_uk / prm.PropagationSpeed;
+                    
+                    alpha_uk = (4*pi*d_uk / prm.lam)^-2;
+                    
+                    H_tens(:, u, k) = H_tens(:, u, k) + alpha_uk * Z(ii, jj) ... 
+                                      * exp(-1j * 2*pi * (k * prm.Delta_f*tau_uk)) ...
+                                      .* exp(1j*2*pi*prm.DeltaRX * (0:prm.N-1).' * sind(prm.AzBins(jj))); 
+                    
+                    lin_ind = ii + (jj-1)*prm.N_R;
+                    Psi(:, u, k, lin_ind) = alpha_uk * exp(-1j * 2*pi * (k * prm.Delta_f*tau_uk)) ...
+                                            .* exp(1j*2*pi*prm.DeltaRX * (0:prm.N-1).' * sind(prm.AzBins(jj))); 
+                end
             end
         end
-
     end

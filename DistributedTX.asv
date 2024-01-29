@@ -1,7 +1,7 @@
 close all
 clear 
 
-rng(52);
+rng(2);
 
 % % % OFDM Signal Params
 
@@ -11,15 +11,15 @@ rng(52);
 
     prm.Delta_f = 120*1e3; % SCS in KHz
     
-    prm.NRB = 20; % number of resource blocks
+    prm.NRB = 0; % number of resource blocks
     prm.K = 12*prm.NRB;
     
     prm.U = 1; % U per RB
     prm.N_T = 1; % number of time slots
     prm.Nofdm = 14; %number of OFDM symbols per slot
+    prm.N_s = prm.N_T*prm.Nofdm;
     prm.MCS = 16; %modulation order
 
-    
 % % % Receive Array Definitions
 
     prm.RxPos = [0; 0; 0]; % Polar
@@ -35,10 +35,10 @@ rng(52);
     thetaMin = prm.RxAZlim(1); thetaMax = prm.RxAZlim(2); %in Azimuth
     prm.AzBins = thetaMin:(thetaMax-thetaMin)/(prm.N_theta-1):thetaMax;
 
-    prm.L = 10;
+    prm.L = 15;
     prm.rMin = 20; prm.rMax = 70;
 
-    limit_rangeRes = true;
+    limit_rangeRes = false;
     if (limit_rangeRes)
         prm.delta_R = prm.PropagationSpeed./(2*prm.Delta_f*prm.K); % nominal range resolution
     else
@@ -54,9 +54,58 @@ rng(52);
 
     [H_tens, Z, ScatPosPol, UserPosPol, Psi] = genMultistaticChannel(prm);
     
+    prm.Pt_dBm = 20;
+    prm.Pt_W = 10^(prm.Pt_dBm/10)*1e-3; % Watts
 
-    % [txGrid] = genUplinkFreqTxGrid(prm.NumUsers, prm.MCS, prm.N_T, prm.Nofdm, prm.K); % (Nofdm * N_T) x M x K
+    [txGrid] = genUplinkFreqTxGrid(prm.U, prm.MCS, prm.N_T, prm.Nofdm, prm.K, prm.Pt_W); % (Nofdm * N_T) x K
     
+    
+    Y_tens = zeros(prm.N, prm.Nofdm * prm.N_T, prm.K);
+    
+    A_Theta = zeros(prm.N * prm.N_s * prm.K, prm.N_R*prm.N_theta);
 
+    for k = 1:prm.K
+        X_k = txGrid(:, :, k);
+        Y_k = zeros(prm.N, prm.N_s);
+        for n_s = 1:prm.N_s
+            Y_k(:, n_s) = H_tens(:, :, k) * X_k(:, n_s); % this has multiuser multiplexed into N RX antennas
+        end
+        Y_tens(:, :, k) = Y_k;
+
+        Y_kron_k = reshape(Y_k, [prm.N * prm.N_s, 1]);
+        A_Theta_k = zeros(prm.N*prm.N_s, prm.N_R*prm.N_theta);
+        for u = 1:prm.U
+            A_Theta_k = A_Theta_k + kron(X_k(u, :).', eye(prm.N)) * squeeze(Psi(:, u, k, :));
+            % A_Theta_uk = kron(X_k(u, :).', eye(prm.N)) * squeeze(Psi(:, u, k, :)); % CHange for multiuser
+        end
+        % A_Theta_k = kron(X_k.', eye(prm.N)) * squeeze(Psi(:, 1, k, :)); % CHange for multiuser
+
+        start_k_index = (k-1) * prm.N * prm.N_s; % no idea if this works
+        A_Theta(start_k_index + 1:start_k_index + prm.N*prm.N_s, :) = A_Theta_k;
+    end
+    Z_hat_vec = omp(A_Theta, Y_tens(:), 30, 1e-20);
+    Z_hat = reshape(Z_hat_vec, [prm.N_R prm.N_theta]);
+
+    peaksnr = psnr(abs(Z_hat).^2, abs(Z).^2, max(abs(Z).^2, [], "all"));
+
+    figure;
+    imagesc(prm.AzBins, prm.RangeBins, abs(Z));
+    xlabel('Azimuth [$^\circ$]', 'Interpreter','latex', 'FontSize',14);
+    ylabel('Range $[m]$', 'Interpreter','latex', 'FontSize',14)
+    title('True','FontSize',14, 'Interpreter','latex');
+    % c=colorbar;
+    % c.Label.String = '$|\textbf Z|$';
+    % c.Label.Interpreter = 'Latex';
+    % c.Label.Rotation = 360;
+    % c.Label.FontSize = 18;
+
+    figure;
+    imagesc(prm.AzBins, prm.RangeBins, abs(Z_hat));
+    xlabel('Azimuth [$^\circ$]', 'Interpreter','latex', 'FontSize',14);
+    ylabel('Range $[m]$', 'Interpreter','latex', 'FontSize',14)
+    title({ ...
+        ['Estimate'], ...
+        ['$PSNR$ = ', num2str(peaksnr, 4), ' dB '] ...
+        }, 'Interpreter','latex','FontSize',14)
 
 
